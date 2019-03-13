@@ -78,14 +78,23 @@ class EncodeServer:
         print(start)
 
         try:
+           #out = subprocess.check_output(f'ffmpeg     \
+           #                               -ss "{start}"             \
+           #                               -i "{video_in}"         \
+           #                               -t 0:0:10               \
+           #                               -vcodec libvpx-vp9      \
+           #                               -acodec libvorbis       \
+           #                               -preset ultrafast       \
+           #                               -deadline realtime -n   \
+           #                              "{video_out}"',
+           #                                encoding='utf-8',
+           #                                shell=True)
             out = subprocess.check_output(f'ffmpeg     \
                                            -ss "{start}"             \
                                            -i "{video_in}"         \
-                                           -t 0:0:10               \
-                                           -vcodec libvpx-vp9      \
-                                           -acodec libvorbis       \
-                                           -preset ultrafast       \
-                                           -deadline realtime -n   \
+                                           -t 0:0:20               \
+                                           -vcodec copy            \
+                                           -acodec copy            \
                                           "{video_out}"',
                                             encoding='utf-8',
                                             shell=True)
