@@ -15,6 +15,7 @@ def search_directory(directory, extensions):
             #Filter by extension
             if(os.path.splitext(file)[1] in extensions):
 
+
                 #We assume that the top-level directory indicates the show, 
                 #or at least some other meaningful category
                 show = path[2:-1]
@@ -45,30 +46,72 @@ class VideoIndex:
     allowed_extensions = [
         '.mp4',
         '.mkv',
+        '.m4v',
         '.flv',
         '.avi',
         '.webm',
         '.mov',
     ]
 
-    #Gets all video file paths for a particular series
+    #Walks through every 
     @rpc
-    def videos(self, seriesName):
+    def load_series(self, name, path):
 
         #Figure out where videos are stored
         self.video_path = self.config.get('VIDEO_REPO', "./videos")
 
+        self.video_path = os.path.join(self.video_path, path)
+
+        print("self.video_path:")
+        print(self.video_path)
+
         videos = search_directory(self.video_path, self.allowed_extensions)
 
         for v in videos:
-            sub_file = v['path'] + v['track'] + '.srt'
+            sub_file = v['path'] + v['track'] + '.en.srt'
             print(sub_file)
+
+            v['show'] = name
+
 
             if(os.path.isfile(sub_file)):
                 self.dispatch("load_subtitles", v)
             else:
                 #If the subtitle file doesn't exist, tell the 
                 #encode server to generate it
-                self.dispatch("generate_subtitles", v)
+                #
+                print("no sub found!")
+                #self.dispatch("generate_subtitles", v)
+
+        return videos
+
+    @rpc
+    def load_series_db(self, name, path):
+
+        #Figure out where videos are stored
+        self.video_path = self.config.get('VIDEO_REPO', "./videos")
+
+        self.video_path = os.path.join(self.video_path, path)
+
+        print("self.video_path:")
+        print(self.video_path)
+
+        videos = search_directory(self.video_path, self.allowed_extensions)
+
+        for v in videos:
+            sub_file = v['path'] + v['track'] + '.en.srt'
+            print(sub_file)
+
+            v['show'] = name
+
+
+            if(os.path.isfile(sub_file)):
+                self.dispatch("load_subtitles", v)
+            else:
+                #If the subtitle file doesn't exist, tell the 
+                #encode server to generate it
+                #
+                print("no sub found!")
+                #self.dispatch("generate_subtitles", v)
 
         return videos

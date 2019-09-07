@@ -6,6 +6,10 @@ from pathlib import Path
 import threading
 import queue
 import subprocess
+import base64
+import hashlib
+
+
 
 from nameko.events import EventDispatcher, event_handler
 from nameko.dependency_providers import Config
@@ -66,18 +70,80 @@ class EncodeServer:
 
 
     @rpc
-    def generateClip(self, timestamp, video_in):
+    def generateClip(self, timestamp, video_in, seriesName):
 
         #start = ffmpeg_timestamp(timestamp.milliseconds)
         start = timestamp
 
+        path = video_in.split(os.sep)
+
+        #./video/<show>/<season>/
+        in_dir = path[0:-1]
+        in_dir = os.path.join(*in_dir)
+
+        #episode_1.webm
+        episode = path[-1]
+
+        print(episode)
+
+        episode = os.path.splitext(episode)
+
+        print(in_dir)
+
+        out_dir = os.path.join(in_dir, episode[0])
+
         video = os.path.splitext(video_in)
 
-        video_out = f'{video[0]}_{start}.webm'
+        #video_out = f'{video[0]}_{start}.webm'
+        print(video)
+        print(out_dir)
 
-        print(start)
+        if not os.path.exists(out_dir):
+            os.mkdir(out_dir)
+
+        #ext = '.webm'
+        #ext = video[1]
+        ext = '.jpeg'
+
+
+        #video_out = f'{video[0]}/{video[0]}_{start}.webm'
+        #video_out = f'{out_dir}/{episode[0]}_{start}{video[1]}'
+        video_out = f'{out_dir}/{episode[0]}_{start}{ext}'
+
+        print(video_out)
+
+
+        #Generate hash for output content path
+
+        hash_id = hashlib.md5(video_out.encode('utf-8')).digest()
+
+        hash_id = base64.urlsafe_b64encode(hash_id).decode('utf-8')
+
+        content_path = f"content/{seriesName}/{hash_id}{ext}"
+
+
+        #If successfully processed output exists at content path,
+        #return it. (Cache hit)
+        if os.path.exists(content_path):
+            return content_path
+
+        #However, if a processing output exists without a corresponding 
+        #content path, it was likely a failed run. 
+        #Delete it and try again (false cache hit? encoder error?)
+        if(os.path.exists(video_out)):
+            os.remove(video_out)
+
 
         try:
+            out = subprocess.check_output(f'ffmpeg                 \
+                                           -ss "{start}"           \
+                                           -i  "{video_in}"        \
+                                           -qscale:v 4 -frames:v 1 \
+                                          "{video_out}"',
+                                          #-vf subtitles="{in_dir}/{episode[0]}.en.srt"     \
+                                            encoding='utf-8',
+                                            shell=True)
+
            #out = subprocess.check_output(f'ffmpeg     \
            #                               -ss "{start}"             \
            #                               -i "{video_in}"         \
@@ -89,19 +155,23 @@ class EncodeServer:
            #                              "{video_out}"',
            #                                encoding='utf-8',
            #                                shell=True)
-            out = subprocess.check_output(f'ffmpeg     \
-                                           -ss "{start}"             \
-                                           -i "{video_in}"         \
-                                           -t 0:0:20               \
-                                           -vcodec copy            \
-                                           -acodec copy            \
-                                          "{video_out}"',
-                                            encoding='utf-8',
-                                            shell=True)
+           #out = subprocess.check_output(f'ffmpeg                 \
+           #                               -ss "{start}"           \
+           #                               -i  "{video_in}"        \
+           #                               -t 0:0:20               \
+           #                               -vcodec copy            \
+           #                               -acodec copy            \
+           #                              "{video_out}"',
+           #                                encoding='utf-8',
+           #                                shell=True)
+
         except subprocess.CalledProcessError as e:
             #Whomp whomp
-            pass
+            return None
 
-        return video_out
+
+        os.symlink(f"../../{video_out}", content_path)
+
+        return content_path
 
                 #'-cpu-used', '-5',

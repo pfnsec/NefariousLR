@@ -2,6 +2,8 @@ from nameko.events import EventDispatcher, event_handler
 from nameko.rpc import rpc, RpcProxy
 
 import srt
+import chardet
+
 try:
     from cfuzzyset import cFuzzySet as FuzzySet
 except ImportError:
@@ -30,7 +32,6 @@ def strip_tags(html):
 #Serialize the timestamp (datetime.timedelta) properly
 def ffmpeg_timestamp(ts):
     ms = int(ts.total_seconds() * 1000)
-    print(ms)
     return f"{ms // 3600000}:{ms // 60000 % 60}:{ms // 1000 % 60}.{ms % 1000}"
 
 
@@ -54,11 +55,13 @@ class SearchEngine:
 
     def loadSubtitles(self, v):
         if not v['show'] in self.subs:
+            print("adding ", v['show'])
             self.subs[v['show']] = {}
 
 
         index = v['path'] + v['track']
-        sub_file = v['path'] + v['track'] + '.srt'
+        sub_file = v['path'] + v['track'] + '.en.srt'
+
 
         if not index in self.subs[v['show']]:
             self.subs[v['show']][index] = {}
@@ -67,9 +70,15 @@ class SearchEngine:
             self.subs[v['show']][index]['fuzz'] = FuzzySet()
 
 
+        #with open(sub_file, 'r', encoding='utf-8-sig') as sub:
+        with open(sub_file, 'rb') as sub:
 
-        with open(sub_file, 'r') as sub:
             sub_text = sub.read()
+
+            enc = chardet.detect(sub_text)['encoding']
+            print(enc)
+
+        sub_text = sub_text.decode(enc)
 
         gen = srt.parse(sub_text)
 
@@ -101,7 +110,9 @@ class SearchEngine:
     def search(self, seriesName, query):
         show_select = []
 
-        show = self.subs['Steven Universe']
+        #print(self.subs)
+
+        show = self.subs[seriesName]
 
         results = []
 
@@ -109,18 +120,34 @@ class SearchEngine:
 
             res = show[index]['fuzz'].get(query)
 
+            if res is None:
+                res = [(0.0, "")]
+
             results.append([res, index])
 
+
+
         results = sorted(results, key = lambda r: r[0][0])
+
+        for r in results:
+            if(r[0][0][0] > 0):
+                print(r[0][0][1])
+
 
         top_result = results[-1]
 
         top_episode = top_result[1]
         top_quote   = top_result[0][0][1]
 
+
         timestamp = ffmpeg_timestamp(show[top_episode]['captions'][top_quote][0])
         path = show[top_episode]['path']
 
         video_in = path['path'] + path['name']
 
-        self.encode_server.generateClip(timestamp, video_in)
+        out_path = self.encode_server.generateClip(timestamp, video_in, seriesName)
+
+        return {
+            'quote': top_quote,
+            'out_path': out_path,
+        }
